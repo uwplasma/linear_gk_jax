@@ -91,12 +91,12 @@ freqMagneticDrift = jnp.dot(kPerp, vDrift)
 def vectorField(t, y, args):
     F0, velDepFreqDiamagnetic, J0, freqMagneticDrift = args
     omega = y
-    d_dist = (F0*J0 - 1)*(omega + (-velDepFreqDiamagnetic + freqMagneticDrift))
+    d_dist = (F0*J0*jnp.array([1,0,0]) - jnp.array([0,1,0]))*(omega + (-velDepFreqDiamagnetic + freqMagneticDrift))
     return jnp.fft.ifft(d_dist)
 
 
 
-
+#Ask About g hat, phi hat
 
 
 
