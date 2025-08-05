@@ -1,7 +1,7 @@
 import jax.numpy as jnp
 import jax.scipy as jsp
 from scipy import stats
-
+import diffrax as dfx
 
 L = jnp.pi
 nt = 100 
@@ -88,5 +88,25 @@ velDepFreqDiamagnetic = freqDiamagnetic*(1 + eta*((v**2 / vThe**2) - 3/2))
 vDrift = jnp.array([1,1,1]) #Replace this with cross product representation
 freqMagneticDrift = jnp.dot(kPerp, vDrift)
 
+def vectorField(t, y, args):
+    F0, velDepFreqDiamagnetic, J0, freqMagneticDrift = args
+    omega = y
+    d_dist = (F0*J0 - 1)*(omega + (-velDepFreqDiamagnetic + freqMagneticDrift))
+    return jnp.fft.ifft(d_dist)
 
-Term = 
+
+
+
+
+
+
+
+
+
+'''
+Source, dy, args
+RHS has distribution function, and potential
+Create a function like source? RHS of dist. func (ODE)
+Initial conditions for g: F0*1+sin(parallel coordinate), in V leave at 0(for now) g will have to vanish?
+Do ifft.
+'''
