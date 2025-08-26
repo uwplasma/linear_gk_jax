@@ -2,6 +2,7 @@ import jax.numpy as jnp
 import jax.scipy as jsp
 from scipy import stats
 import diffrax as dfx
+from jax.scipy.integrate import trapezoid
 
 L = jnp.pi
 nt = 100 
@@ -11,6 +12,7 @@ theta = jnp.linspace(-L-deltaTheta, L, num = 100)
 Theta = jnp.meshgrid(theta, ) 
 m = 1 # Mass placeholder
 T = 1 #Temperature placeholder
+tRatio = 0.01 # Ratio of e temp to temp placeholder
 
 #placeholder scalars
 kPsi = 1  
@@ -70,15 +72,16 @@ ve = jnp.linspace(vMine, vMaxe, nV)
 Theta, Ve = jnp.meshgrid(theta, ve, indexing= 'ij')
 waveNumberElectrons = 0.8
 Ae = 1
-n0e = 4
+Ai = 0
+n0 = 4
 
-F0 = n0e / jnp.linspace(2.*jnp.pi *vThe**2)*(0.5 * jnp.exp(-(Ve-vDe*vThe)**2 / (2.*vThe**2)) +0.5 * jnp.exp(-(Ve+vDe*vThe)**2 / (2.*vThe**2))) * (1 + Ae * jnp.sin(waveNumberElectrons * 2 * jnp.pi * Theta / L))
-magF0 = jnp.linalg.norm(F0)
+F0e = n0 / jnp.linspace(2.*jnp.pi *vThe**2)*(0.5 * jnp.exp(-(Ve-vDe*vThe)**2 / (2.*vThe**2)) +0.5 * jnp.exp(-(Ve+vDe*vThe)**2 / (2.*vThe**2))) * (1 + Ae * jnp.sin(waveNumberElectrons * 2 * jnp.pi * Theta / L))
+magF0e = jnp.linalg.norm(F0e)
 
 eta = 1 #Placeholder
 
-gradF0 = jnp.gradient(F0)
-den = m*freqCyclotron*T*magF0
+gradF0 = jnp.gradient(F0e)
+den = m*freqCyclotron*T*magF0e
 bCrossK = jnp.cross(b, kPerp)
 freqDiamagnetic = (jnp.dot(bCrossK, gradF0)) / den
 
@@ -88,19 +91,24 @@ velDepFreqDiamagnetic = freqDiamagnetic*(1 + eta*((v**2 / vThe**2) - 3/2))
 vDrift = jnp.array([1,1,1]) #Replace this with cross product representation
 freqMagneticDrift = jnp.dot(kPerp, vDrift)
 
-def vectorField(t, y, args):
-    F0, velDepFreqDiamagnetic, J0, freqMagneticDrift = args
+def vectorField( y, args):
+    F0e, velDepFreqDiamagnetic, J0, freqMagneticDrift = args
     omega = y
-    d_dist = (F0*J0*jnp.array([1,0,0]) - jnp.array([0,1,0]))*(omega + (-velDepFreqDiamagnetic + freqMagneticDrift))
+    d_dist = (F0e*J0*jnp.array([1,0,0]) - jnp.array([0,1,0]))*(omega + (-velDepFreqDiamagnetic + freqMagneticDrift))
     return jnp.fft.ifft(d_dist)
 
 
 
 #Ask About g hat, phi hat
 
+rho = jsp.integrate.trapezoid(F0e, x = Ve, axis = 1)
 
+qe = 0.5 #Placeholder e charge
+Te = 0.1 # placeholder electron temp
 
+tau = (qe*T) / (q * Te)
 
+phi = rho / tau
 
 
 '''
@@ -109,4 +117,10 @@ RHS has distribution function, and potential
 Create a function like source? RHS of dist. func (ODE)
 Initial conditions for g: F0*1+sin(parallel coordinate), in V leave at 0(for now) g will have to vanish?
 Do ifft.
+
+Look at real space example, add already parameterized conditions using lineax and trapezoid
+'''
+'''
+Integral along Vperp and Vparallel
+Look into system solver
 '''
