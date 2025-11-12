@@ -14,7 +14,7 @@ class Field(eqx.Module):
     """
 
   
-    n_theta: int  #int = eqx.field(static=True)
+    ntheta: int  #int = eqx.field(static=True)
     theta_grid: Float[Array, "n_theta"]
     grad_alpha_squared: Float[Array, "n_theta"]
     grad_alpha_dot_grad_psi: Float[Array, "n_theta"]
@@ -25,12 +25,12 @@ class Field(eqx.Module):
     Bcross_kappa_grad_psi: Float[Array, "n_theta"] 
     Bcross_kappa_grad_alpha: Float[Array, "n_theta"] 
     gradpar: Float[Array, "n_theta"]
-    rho: Float[Array, "n_theta"]   
+    grad_psi: Float[Array, "n_theta"]   
     
 
     def __init__(
         self,
-        n_theta: int,
+        ntheta: int,
         theta_grid : Float[Array,'...'],
         grad_alpha_squared : Float[Array,'...'],
         grad_alpha_dot_grad_psi : Float[Array,'...'],
@@ -41,11 +41,11 @@ class Field(eqx.Module):
         Bcross_kappa_grad_psi : Float[Array,'...'],
         Bcross_kappa_grad_alpha : Float[Array,'...'],
         gradpar : Float[Array,'...'],
-        rho : Float[Array,'...'],
+        grad_psi : Float[Array,'...']
     ):
 
 
-        self.n_theta=n_theta
+        self.ntheta=ntheta
         self.theta_grid=theta_grid
         self.grad_alpha_squared=grad_alpha_squared
         self.grad_alpha_dot_grad_psi=grad_alpha_dot_grad_psi
@@ -56,7 +56,7 @@ class Field(eqx.Module):
         self.Bcross_kappa_grad_psi=Bcross_kappa_grad_psi
         self.Bcross_kappa_grad_alpha=Bcross_kappa_grad_alpha
         self.gradpar=gradpar
-        self.rho=rho
+        self.grad_psi=grad_psi
 
 
     @classmethod
@@ -74,18 +74,18 @@ class Field(eqx.Module):
         #This should go to equilibrium reader
         efile = Dataset(eik_file, mode="r")
 
-        ntheta = efile.variables["ntheta"][:].filled()
-        theta_grid = efile.variables["theta_grid"][:].filled()
-        grad_alpha_squared = efile.variables["grad_alpha_squared"][:].filled()
-        grad_alpha_dot_grad_psi = efile.variables["grad_alpha_dot_grad_psi"][:].filled()
-        grad_psi_squared = efile.variables["grad_psi_squared"][:].filled()
-        B = efile.variables["B"][:].filled()
-        Bcross_gradB_grad_psi = efile.variables["Bcross_gradB_grad_psi"][:].filled()
-        Bcross_gradB_grad_alpha = efile.variables["Bcross_gradB_grad_alpha"][:].filled()
-        Bcross_kappa_grad_psi = efile.variables["Bcross_kappa_grad_psi"][:].filled()
-        Bcross_kappa_grad_alpha = efile.variables["Bcross_kappa_grad_alpha"][:].filled()
+        theta_grid = efile.variables["theta"][:].filled()
+        ntheta = len(theta_grid)
+        grad_alpha_squared = efile.variables["gds2"][:].filled()
+        grad_alpha_dot_grad_psi = efile.variables["gds21"][:].filled()
+        grad_psi_squared = efile.variables["gds22"][:].filled()
+        B = efile.variables["bmag"][:].filled()
+        Bcross_gradB_grad_psi = efile.variables["gbdrift0"][:].filled()
+        Bcross_gradB_grad_alpha = efile.variables["gbdrift"][:].filled()
+        Bcross_kappa_grad_psi = efile.variables["cvdrift0"][:].filled()
+        Bcross_kappa_grad_alpha = efile.variables["cvdrift"][:].filled()
         gradpar = efile.variables["gradpar"][:].filled()
-        rho = efile.variables["rho"][:].filled()
+        grad_psi = efile.variables["grho"][:].filled()
 
         efile.close()
 
@@ -101,7 +101,7 @@ class Field(eqx.Module):
         data["Bcross_kappa_grad_psi"] = Bcross_kappa_grad_psi
         data["Bcross_kappa_grad_alpha"] = Bcross_kappa_grad_alpha
         data["gradpar"] = gradpar
-        data["rho"] = rho
+        data["grad_psi"] = grad_psi
 
         return cls(**data)
 
@@ -109,19 +109,26 @@ class Field(eqx.Module):
 
 
     @classmethod
-    def read_from_pyqsc(cls,
-        eik_file: str, r: float,config_id:int, ntheta:int,  nphi:int=100
+    def read_from_pyqsc(cls,s: float,
+     r: float,
+     config_id:int,
+    ntheta:int, 
+      nphi:int=51
     ):
-        """Construct Field from gx/gs2-like eik file.
+        """Construct Field from pyqsc database
 
         Parameters
         ----------
-        eik_file : path-to-eik-file
+        s : radial position (toroidal flux normalized)
+        r : minor radius at which to compute the field (m), aka boundary radius
+        config_id : pyQSC configuration ID from the database
+        ntheta : number of poloidal grid points for discretization
+        nphi : number of toroidal grid points for pyqsc evaluations
         """
         from netCDF4 import Dataset
         import requests
         from scipy.interpolate import interp1d
-        from pyqsc import Qsc
+        from qsc import Qsc
 
         #URL with database 
         url="https://stellarator.physics.wisc.edu/backend/api/configs"
@@ -179,7 +186,7 @@ class Field(eqx.Module):
         ## Resolution
         ntheta_input=ntheta+1  #Has to be the same as ntheta in GX input ntheta=nz-1=96, then ntheta_input=ntheta+1 , value used by M. Landremann
         nz=ntheta_input
-        ntgrid=int(np.floor(ntheta_input/2))
+        ntgrid=int(jnp.floor(ntheta_input/2))
 
 
         ## Geometry and normalizations
@@ -297,22 +304,22 @@ class Field(eqx.Module):
         grho_temp=jnp.zeros(ntheta_input)    
 
         for i in range(len(thetaB_grid)):
-            gbdriftNew_temp[i] = gbdriftNew(thetaB_grid[i])
-            cvdriftNew_temp[i] = cvdriftNew(thetaB_grid[i])
-            gds2New_temp[i] = gds2New(thetaB_grid[i])  
-            bmagNew_temp[i] = bmagNew(thetaB_grid[i])
-            gds21New_temp[i] = gds21New(thetaB_grid[i])  
-            gds22New_temp[i] = gds22New(thetaB_grid[i])                                          
-            gbdrift0New_temp[i] = gbdrift0New(thetaB_grid[i])
-            cvdrift0New_temp[i] = cvdrift0New(thetaB_grid[i])
-            grho_temp[i] = grho(thetaB_grid[i])
-            gradpar_temp[i]=gradparNew(thetaB_grid[i])
+            gbdriftNew_temp=gbdriftNew_temp.at[i].set(gbdriftNew(thetaB_grid[i]))
+            cvdriftNew_temp=cvdriftNew_temp.at[i].set(cvdriftNew(thetaB_grid[i]))
+            gds2New_temp=gds2New_temp.at[i].set(gds2New(thetaB_grid[i]))
+            bmagNew_temp=bmagNew_temp.at[i].set(bmagNew(thetaB_grid[i]))
+            gds21New_temp=gds21New_temp.at[i].set(gds21New(thetaB_grid[i]))  
+            gds22New_temp=gds22New_temp.at[i].set(gds22New(thetaB_grid[i]))                                          
+            gbdrift0New_temp=gbdrift0New_temp.at[i].set(gbdrift0New(thetaB_grid[i]))
+            cvdrift0New_temp=cvdrift0New_temp.at[i].set(cvdrift0New(thetaB_grid[i]))
+            grho_temp=grho_temp.at[i].set(grho(thetaB_grid[i]))
+            gradpar_temp=gradpar_temp.at[i].set(gradparNew(thetaB_grid[i]))
 
         ## Note: gradpar_half_grid has 1 less grid point than gradpar_temp
         gradpar_half_grid=jnp.zeros((ntheta_input-1))
         for itheta in range((ntheta_input-2)):
-            gradpar_half_grid[itheta] = 0.5 * (np.abs(gradpar_temp[itheta]) + np.abs(gradpar_temp[itheta+1]))
-        gradpar_half_grid[-1] = gradpar_half_grid[0]
+            gradpar_half_grid=gradpar_half_grid.at[itheta].set( 0.5 * (jnp.abs(gradpar_temp[itheta]) + jnp.abs(gradpar_temp[itheta+1])))
+        gradpar_half_grid=gradpar_half_grid.at[-1].set(gradpar_half_grid[0])
 
         temp_grid = jnp.zeros((ntheta_input))
         z_on_theta_grid = jnp.zeros((ntheta_input))
@@ -326,20 +333,20 @@ class Field(eqx.Module):
 
 
         for itheta in range(1,ntheta_input):
-            temp_grid[itheta] = temp_grid[itheta-1] + dtheta * (1. / jnp.abs(gradpar_half_grid[itheta-1]))
+            temp_grid=temp_grid.at[itheta].set(temp_grid[itheta-1] + dtheta * (1. / jnp.abs(gradpar_half_grid[itheta-1])))
 
         for itheta in range(ntheta_input):
-            z_on_theta_grid[itheta] = temp_grid[itheta] - temp_grid[index_of_middle]
+            z_on_theta_grid=z_on_theta_grid.at[itheta].set(temp_grid[itheta] - temp_grid[index_of_middle])
 
-        desired_gradpar =np.pi/np.abs(z_on_theta_grid[0])
+        desired_gradpar =jnp.pi/jnp.abs(z_on_theta_grid[0])
 
         for itheta in range(ntheta_input):
-            z_on_theta_grid[itheta] = z_on_theta_grid[itheta] * desired_gradpar
-            gardparNew_val[itheta] = desired_gradpar # setting entire gradpar array to the constant value "desired_gradpar"
+            z_on_theta_grid=z_on_theta_grid.at[itheta].set(z_on_theta_grid[itheta] * desired_gradpar)
+            gardparNew_val=gardparNew_val.at[itheta].set(desired_gradpar) # setting entire gradpar array to the constant value "desired_gradpar"
 
     
         for itheta in range(ntheta_input):
-            uniform_zgrid[itheta] = z_on_theta_grid[0] + itheta*dtheta_pi
+            uniform_zgrid=uniform_zgrid.at[itheta].set(z_on_theta_grid[0] + itheta*dtheta_pi)
 
 
 
@@ -369,7 +376,7 @@ class Field(eqx.Module):
         data["Bcross_kappa_grad_psi"] = cvdrift0New_val
         data["Bcross_kappa_grad_alpha"] = cvdriftNew_val
         data["gradpar"] = gardparNew_val
-        data["rho"] = grho_val
+        data["grad_psi"] = grho_val
 
     
         return cls(**data)
