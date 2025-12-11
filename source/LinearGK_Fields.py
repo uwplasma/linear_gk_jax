@@ -1,3 +1,8 @@
+import os
+number_of_processors_to_use = 1
+os.environ["XLA_FLAGS"] = f'--xla_force_host_platform_device_count={number_of_processors_to_use}'
+
+
 import jax
 import jax.numpy as jnp
 import jax.scipy as jsp
@@ -6,8 +11,11 @@ import matplotlib.pyplot as plt
 
 from _field import Field
 
-path =  # Enter path here, unsure what this should be
-field: Field = Field.read_from_eik(path)
+input_file='w7x_adiabatic_electrons.eik.nc'
+
+
+path = os.path.join(os.path.dirname(__name__), '../input_files', input_file)# Enter path here, unsure what this should be
+field = Field.read_from_eik(path)
 
 # Geometry
 theta = field.theta_grid              # (Nz,)
@@ -21,8 +29,8 @@ omega_star = field.grad_psi                              # (Nz,)
 
 #Velocity space grids and parameters
 
-Nv_par = 32
-Nv_perp = 24
+Nv_par = 100
+Nv_perp = 50
 v_max = 3.0
 q, T, m = 1.0, 1.0, 1.0
 
@@ -135,7 +143,7 @@ y0 = flatten_state(h0)
 term = diffrax.ODETerm(rhs_fun)
 solver = diffrax.Dopri5()
 t0, t1, dt0 = 0.0, 1.0, 1e-3
-saveat = diffrax.SaveAt(ts=jnp.linspace(t0, t1, 21))
+saveat = diffrax.SaveAt(ts=jnp.linspace(t0, t1, 100))
 controller = diffrax.PIDController(rtol=1e-6, atol=1e-9)
 
 sol = diffrax.diffeqsolve(term, solver,
@@ -173,7 +181,8 @@ plt.ylabel("Re[h]")
 plt.title("Final Re[h(z)]")
 plt.legend()
 plt.tight_layout()
-plt.show()
+#plt.show()
+plt.savefig('Real.png')
 
 plt.figure(figsize=(8,5))
 for i in v_perp_indices:
@@ -184,7 +193,20 @@ plt.ylabel("Im[h]")
 plt.title("Final Im[h(z)]")
 plt.legend()
 plt.tight_layout()
-plt.show()
+#plt.show()
+plt.savefig('Img.png')
+
+# plt.figure(figsize=(8,5))
+# for i in v_perp_indices:
+#     plt.plot(sol.ts, jnp.square(jnp.imag(sol.ys[:,10, v_par_index, i])),
+#              label=f"v_perp={v_perp[i]:.2f}")
+# plt.xlabel("z")
+# plt.ylabel("Im[h]")
+# plt.title("Final Im[h(z)]")
+# plt.legend()
+# plt.tight_layout()
+# #plt.show()
+# plt.savefig('Norm_Img_local.png')
 
 plt.figure(figsize=(6,4))
 plt.plot(sol.ts, norms)
@@ -192,4 +214,5 @@ plt.xlabel("t")
 plt.ylabel("||h||₂")
 plt.title("Time evolution")
 plt.tight_layout()
-plt.show()
+#plt.show()
+plt.savefig('norms.png')

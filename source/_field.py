@@ -8,6 +8,9 @@ import interpax
 from jaxtyping import Array, Float  # https://github.com/google/jaxtyping
 import equinox as eqx
 
+
+
+
 class Field(eqx.Module):
     """Magnetic field configuration terms
 
@@ -27,7 +30,6 @@ class Field(eqx.Module):
     gradpar: Float[Array, "n_theta"]
     grad_psi: Float[Array, "n_theta"]   
     
-
     def __init__(
         self,
         ntheta: int,
@@ -112,8 +114,8 @@ class Field(eqx.Module):
     def read_from_pyqsc(cls,s: float,
      r: float,
      config_id:int,
-    ntheta:int, 
-      nphi:int=51
+     ntheta:int, 
+     nphi:int=51
     ):
         """Construct Field from pyqsc database
 
@@ -380,3 +382,5 @@ class Field(eqx.Module):
 
     
         return cls(**data)
+    
+

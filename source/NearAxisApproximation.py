@@ -4,6 +4,7 @@ from scipy import stats
 import diffrax as dfx
 from jax.scipy.integrate import trapezoid
 
+
 L = jnp.pi
 nt = 100 
 nTheta = 200
