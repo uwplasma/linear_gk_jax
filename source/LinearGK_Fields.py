@@ -1,8 +1,3 @@
-import os
-number_of_processors_to_use = 1
-os.environ["XLA_FLAGS"] = f'--xla_force_host_platform_device_count={number_of_processors_to_use}'
-
-
 import jax
 import jax.numpy as jnp
 import jax.scipy as jsp
@@ -11,41 +6,51 @@ import matplotlib.pyplot as plt
 
 from _field import Field
 
-input_file='w7x_adiabatic_electrons.eik.nc'
-
-
-path = os.path.join(os.path.dirname(__name__), '../input_files', input_file)# Enter path here, unsure what this should be
-field = Field.read_from_eik(path)
+path =  # Enter path here, unsure what this should be
+field: Field = Field.read_from_eik(path)
 
 # Geometry
 theta = field.theta_grid              # (Nz,)
 Nz = field.ntheta
 gradpar = field.gradpar               # ∂/∂z coefficient
 B = field.B                           
-  
+
 # Drift
 omega_d = field.Bcross_gradB_grad_alpha[:, None, None]  # shape (Nz,1,1)
-omega_star = field.grad_psi                              # (Nz,)
 
 #Velocity space grids and parameters
 
-Nv_par = 100
-Nv_perp = 50
+Nv_par = 32
+Nv_perp = 24
 v_max = 3.0
 q, T, m = 1.0, 1.0, 1.0
 
 v_par = jnp.linspace(-v_max, v_max, Nv_par)
 v_perp = jnp.linspace(0.0, v_max, Nv_perp)
+v_th = jnp.sqrt(2.0 * T / m)
+
+# Parameters for omega_star
+Kalpha = field.kalpha   
+eta = 1.0                           
+
+
+epsilon = 0.5 * (v_par[None, :, None]**2 +
+                 v_perp[None, None, :]**2)
+
+df_dpsi = field.grad_psi[:, None, None]   # (Nz,1,1)
+
+omega_star = (Kalpha * T / q) * df_dpsi * (
+    1.0 + eta * ((epsilon / v_th**2) - 1.5)
+)
+
 
 # Maxwellian
-v_th = jnp.sqrt(2.0 * T / m)
+
 fM_par = (1.0 / jnp.sqrt(jnp.pi * v_th**2)) * jnp.exp(-(v_par**2) / (v_th**2))
 fM_perp = (v_perp / (v_th**2)) * jnp.exp(-(v_perp**2) / (v_th**2))
 fM_2D = fM_par[None, :, None] * fM_perp[None, None, :]
 
-# 3. Parallel coordinate and spectral operator from Field
-#    The solver expects a uniform z-grid; Field gives theta.
-#    We map theta → z via a cumulative integral using gradpar.
+# Parallel coordinate and spectral operator from Field
 
 # z' = ∫ dθ / |gradpar|
 abs_gp = jnp.abs(gradpar)
@@ -121,7 +126,7 @@ def rhs_fun(t, y_real, args):
 
     # Drive term using omega_star (from grad_psi)
     phi_z = phi_of_tz(t)
-    drive = 1j * (q/T) * (omega_star[:, None, None] *
+    drive = 1j * (omega_star[:, None, None] *
                            fM_2D *
                            phi_z[:, None, None] *
                            J0_krho[None, None, :])
@@ -143,7 +148,7 @@ y0 = flatten_state(h0)
 term = diffrax.ODETerm(rhs_fun)
 solver = diffrax.Dopri5()
 t0, t1, dt0 = 0.0, 1.0, 1e-3
-saveat = diffrax.SaveAt(ts=jnp.linspace(t0, t1, 100))
+saveat = diffrax.SaveAt(ts=jnp.linspace(t0, t1, 21))
 controller = diffrax.PIDController(rtol=1e-6, atol=1e-9)
 
 sol = diffrax.diffeqsolve(term, solver,
@@ -181,8 +186,7 @@ plt.ylabel("Re[h]")
 plt.title("Final Re[h(z)]")
 plt.legend()
 plt.tight_layout()
-#plt.show()
-plt.savefig('Real.png')
+plt.show()
 
 plt.figure(figsize=(8,5))
 for i in v_perp_indices:
@@ -193,20 +197,7 @@ plt.ylabel("Im[h]")
 plt.title("Final Im[h(z)]")
 plt.legend()
 plt.tight_layout()
-#plt.show()
-plt.savefig('Img.png')
-
-# plt.figure(figsize=(8,5))
-# for i in v_perp_indices:
-#     plt.plot(sol.ts, jnp.square(jnp.imag(sol.ys[:,10, v_par_index, i])),
-#              label=f"v_perp={v_perp[i]:.2f}")
-# plt.xlabel("z")
-# plt.ylabel("Im[h]")
-# plt.title("Final Im[h(z)]")
-# plt.legend()
-# plt.tight_layout()
-# #plt.show()
-# plt.savefig('Norm_Img_local.png')
+plt.show()
 
 plt.figure(figsize=(6,4))
 plt.plot(sol.ts, norms)
@@ -214,5 +205,4 @@ plt.xlabel("t")
 plt.ylabel("||h||₂")
 plt.title("Time evolution")
 plt.tight_layout()
-#plt.show()
-plt.savefig('norms.png')
+plt.show()
