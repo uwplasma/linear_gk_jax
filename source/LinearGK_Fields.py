@@ -15,19 +15,26 @@ Nz = field.ntheta
 gradpar = field.gradpar               # ∂/∂z coefficient
 B = field.B                           
 
-# Drift
-omega_d = field.Bcross_gradB_grad_alpha[:, None, None]  # shape (Nz,1,1)
-
 #Velocity space grids and parameters
 
 Nv_par = 32
 Nv_perp = 24
 v_max = 3.0
 q, T, m = 1.0, 1.0, 1.0
-
 v_par = jnp.linspace(-v_max, v_max, Nv_par)
 v_perp = jnp.linspace(0.0, v_max, Nv_perp)
 v_th = jnp.sqrt(2.0 * T / m)
+
+# Drift
+Omega = q * B[:, None, None] / m
+
+vd_prefactor = (v_par[None, :, None]**2 +
+                0.5 * v_perp[None, None, :]**2) / Omega
+
+omega_d = field.Bcross_gradB_grad_alpha[:, None, None] * vd_prefactor
+
+
+
 
 # Parameters for omega_star
 Kalpha = field.kalpha   
@@ -73,11 +80,27 @@ dz = z[1] - z[0]
 kz = jnp.fft.fftfreq(Nz, d=dz) * 2.0 * jnp.pi
 ikz = 1j * kz
 
-#phi(z,t): simple decaying mode (can be replaced w/ GK quasineutrality)
+#phi calculation
 
-def phi_of_tz(t):
-    amp = 1e-3 * jnp.exp(-0.1 * t)
-    return amp * jnp.sin(2.0 * jnp.pi * z / Lz)
+dv_par = 2 * v_max / Nv_par
+dv_perp = v_max / Nv_perp
+velocity_measure = 2.0 * jnp.pi * v_perp[None, None, :] * dv_par * dv_perp
+def velocity_integral(f):
+    return jnp.sum(f * velocity_measure, axis=(1, 2))
+
+def compute_phi(h):
+    # Numerator: q ∫ d^3v J0 f
+    num = q * velocity_integral(J0_krho[None, None, :] * h)
+
+    # Denominator term
+    denom_integral = velocity_integral(
+        fM_2D * J0_krho[None, None, :]**2
+    )
+
+    denom = m * (q**2 / T) * (1.0 - denom_integral / m)
+
+    return num / denom
+
 
 # J0 factor
 k_perp = 0.5
@@ -125,12 +148,8 @@ def rhs_fun(t, y_real, args):
     drift = -1j * omega_d * h
 
     # Drive term using omega_star (from grad_psi)
-    phi_z = phi_of_tz(t)
-    drive = 1j * (omega_star[:, None, None] *
-                           fM_2D *
-                           phi_z[:, None, None] *
-                           J0_krho[None, None, :])
-
+    phi_z = compute_phi(h)
+    drive = 1j * omega_star * fM_2D * phi_z[:, None, None] * J0_krho[None, None, :]
     dhdt = streaming + drift + drive
     return flatten_state(dhdt)
 
