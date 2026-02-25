@@ -1,7 +1,7 @@
 
 #UNFINISHED, Just checking to see if this is on the right track
 
-def rhs_func(field, V):
+def rhs_func(field, grid):
     '''
     Takes a field class(field), and velocity grid(V) as arguments
     Returns the drift, drive, and frequency(omega_d, omega_star, Omega) terms
