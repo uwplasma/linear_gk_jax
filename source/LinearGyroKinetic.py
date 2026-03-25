@@ -61,7 +61,7 @@ def phi_of_tz(t):
     return amp * jnp.sin(2.0 * jnp.pi * z / Lz)
 
 # RHS of distribution
-def rhs_fun(t, y_real, args):
+def rhs_fun(t, y_real, args): 
     h = unflatten_state(y_real)  # (Nz, Nv_par, Nv_perp)
 
     # ∂h/∂z for each (v_par,v_perp)

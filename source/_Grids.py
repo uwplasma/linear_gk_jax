@@ -7,14 +7,39 @@ import h5py as h5
 import interpax 
 from jaxtyping import Array, Float  # https://github.com/google/jaxtyping
 import equinox as eqx
-from _field import Field
+from _Field import Field
 
 
 
 class Grid(eqx.Module):
+    """Grid class to hold the grid information for the gyrokinetic solver. This class is initialized from the field class, 
+    and contains the grid information for the velocity space and the frequencies.
+
+    """
+
+  
+    nz: int  
+    z_grid: Float[Array, "nz"]´
+    Vel: Float[Array, "3 ..."]  # [v_par, v_perp, v_th]
+    Freq: Float[Array, "3 ..."]  # [Omega, omega_d, omega_star]
     
+    def __init__(
+        self,
+        nz: int,
+        z_grid : Float[Array,'...'],
+        Vel: Float[Array, '3 ...'],
+        Freq: Float[Array, '3 ...']         
+    ):
+
+
+        self.nz=nz
+        self.z_grid=z_grid
+        self.Vel = Vel
+        self.Freq = Freq
+
+
     @classmethod
-    def fromfield(field, V, cls, q=1, T=1, m=1, eta=1):
+    def fromfield(cls, field, V, q=1, T=1, m=1, eta=1):
         
         data = {}
         B = field.B
@@ -43,5 +68,6 @@ class Grid(eqx.Module):
         nz = Field.ntheta
         
         data["Nz"] = nz
+        data["z_grid"] = field.theta_grid
         
         return cls(**data)
